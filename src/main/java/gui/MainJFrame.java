@@ -59,12 +59,16 @@ public class MainJFrame extends JFrame {
         setVisible(true);
     }
 
-    // Метод для закрытия окна
     public void closeWindow() {
-        if (closeSpreadsheet() == JOptionPane.YES_OPTION) {
-            dispose();  // Закрытие текущего окна
+        int result = closeSpreadsheet();
+        if (result == JOptionPane.YES_OPTION) {
+            dispose();  // Закрытие текущего окна, если выбрали "Save"
+        } else if (result == JOptionPane.NO_OPTION) {
+            dispose();  // Закрытие текущего окна, если выбрали "Don't save"
         }
+        // Если выбран "Cancel", окно не закрывается, поэтому ничего не делаем
     }
+
 
     // Обычный конструктор для старого окна
     public MainJFrame() {
@@ -93,7 +97,6 @@ public class MainJFrame extends JFrame {
 
     // Другие методы, такие как open, save, и т.д.
 
-    // Метод для закрытия вкладки или окна
     public static int closeSpreadsheet() {
         if (spreadsheet.isModified()) {
             Object[] options = {"Save",
@@ -173,18 +176,6 @@ public class MainJFrame extends JFrame {
 
     public static void redrawTable() {
         sheetTabbedPane.getSelectedComponent().repaint();
-    }
-
-    public void closeCurrentTab() {
-        int selectedIndex = sheetTabbedPane.getSelectedIndex();
-        if (selectedIndex != -1) {
-            sheetTabbedPane.remove(selectedIndex);
-        }
-
-        // Если больше нет вкладок, закрываем окно
-        if (sheetTabbedPane.getTabCount() == 0) {
-            dispose();
-        }
     }
 
 }
