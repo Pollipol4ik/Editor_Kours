@@ -4,10 +4,6 @@ import formula.AST.*;
 import spreadsheet.ICell;
 import spreadsheet.ISheet;
 
-/**
- * DependencyVisitor is responsible for adding dependencies between cells
- * based on the parsed formula's abstract syntax tree (AST).
- */
 public class DependencyVisitor implements Visitor {
 
     private static DependencyGraph dependencyGraph;
@@ -18,9 +14,6 @@ public class DependencyVisitor implements Visitor {
 
     private boolean dependenciesFound;
 
-    /**
-     * Singleton method to get an instance of DependencyVisitor.
-     */
     public static DependencyVisitor getDependencyVisitor() {
         if (dependencyVisitor == null) {
             dependencyVisitor = new DependencyVisitor();
@@ -28,14 +21,6 @@ public class DependencyVisitor implements Visitor {
         return dependencyVisitor;
     }
 
-    /**
-     * Adds dependencies to the dependency graph based on the formula and the current cell.
-     *
-     * @param dependencyGraph the dependency graph to update
-     * @param formula         the formula to process
-     * @param cell            the current cell
-     * @return true if dependencies were found, false otherwise
-     */
     public boolean addDependencies(DependencyGraph dependencyGraph, Formula formula, ICell cell) {
         DependencyVisitor.dependencyGraph = dependencyGraph;
         this.cell = cell;
@@ -51,8 +36,33 @@ public class DependencyVisitor implements Visitor {
 
     @Override
     public void visitBinaryExpression(BinaryExpression exp) {
-        exp.left.accept(this);
-        exp.right.accept(this);
+        if (exp.operator == BinaryOperator.RANGE) {
+            if (exp.left instanceof CellReference leftCellReference
+                    && exp.right instanceof CellReference rightCellReference) {
+                ISheet leftSheet = leftCellReference.sheet == null
+                        ? cell.getSheet()
+                        : cell.getSheet().getSpreadsheet().getSheet(leftCellReference.sheet),
+                        rightSheet = rightCellReference.sheet == null
+                                ? cell.getSheet()
+                                : cell.getSheet().getSpreadsheet().getSheet(rightCellReference.sheet);
+                if (leftSheet != rightSheet) {
+                    return;
+                }
+                int leftColumn = Math.min(leftCellReference.column, rightCellReference.column),
+                        rightColumn = Math.max(leftCellReference.column, rightCellReference.column),
+                        topRow = Math.min(leftCellReference.row, rightCellReference.row),
+                        bottomRow = Math.max(leftCellReference.row, rightCellReference.row);
+                for (int i = topRow; i <= bottomRow; ++i) {
+                    for (int j = leftColumn; j <= rightColumn; ++j) {
+                        dependencyGraph.addDependency(cell.getAddress(), leftSheet.getCellAt(i, j).getAddress());
+                        System.out.println("dep" + cell.getAddress() + leftSheet.getCellAt(i, j).getAddress());
+                    }
+                }
+            }
+        } else {
+            exp.left.accept(this);
+            exp.right.accept(this);
+        }
     }
 
     @Override
@@ -62,52 +72,38 @@ public class DependencyVisitor implements Visitor {
 
     @Override
     public void visitFunctionCall(FunctionCall call) {
-        call.argumentList.forEach(arg -> arg.accept(this));
+        call.argumentList.forEach((arg) -> arg.accept(this));
     }
 
     @Override
     public void visitCellReference(CellReference ref) {
         ISheet targetSheet = ref.sheet == null ? cell.getSheet() : cell.getSheet().getSpreadsheet().getSheet(ref.sheet);
-
-        if (ref.isRange()) {
-            // Process a range of cells
-            for (int row = ref.startRow; row <= ref.endRow; row++) {
-                for (int col = ref.startColumn; col <= ref.endColumn; col++) {
-                    ICell targetCell = targetSheet.getCellAt(row, col);
-                    dependencyGraph.addDependency(cell.getAddress(), targetCell.getAddress());
-                    dependenciesFound = true;
-                }
-            }
-        } else {
-            // Process a single cell
-            ICell targetCell = targetSheet.getCellAt(ref.startRow, ref.startColumn);
-            dependencyGraph.addDependency(cell.getAddress(), targetCell.getAddress());
-            dependenciesFound = true;
-        }
+        dependencyGraph.addDependency(cell.getAddress(), targetSheet.getCellAt(ref.row, ref.column).getAddress());
+        dependenciesFound = true;
     }
 
     @Override
-    public void visitParenExpression(ParenExpression exp) {
+    public void visitParenExpression(ParenExpression exp) throws TypeErrorException {
         exp.exp.accept(this);
     }
 
     @Override
     public void visitIntegerNumber(IntegerNumber num) {
-        // Integer numbers do not introduce dependencies
+
     }
 
     @Override
     public void visitDoubleNumber(DoubleNumber num) {
-        // Double numbers do not introduce dependencies
+
     }
 
     @Override
     public void visitBooleanValue(BooleanValue b) {
-        // Boolean values do not introduce dependencies
+
     }
 
     @Override
     public void visitStringLiteral(StringLiteral lit) {
-        // String literals do not introduce dependencies
+
     }
 }

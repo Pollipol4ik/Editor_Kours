@@ -14,48 +14,41 @@ import formula.AST.Visitor;
 import spreadsheet.ICell;
 import spreadsheet.ISheet;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Stack;
+import java.util.stream.Collectors;
 
-/**
- * EvaluatorVisitor is responsible for evaluating formulas and expressions within spreadsheet cells.
- * It follows the Visitor pattern to traverse and evaluate AST nodes.
- */
 public class EvaluatorVisitor implements Visitor {
 
-    private static EvaluatorVisitor instance;
-    private final Stack<Object> valueStack = new Stack<>();
-    private ISheet currentSheet;
+    private static EvaluatorVisitor evaluatorVisitor;
 
-    // Singleton pattern for obtaining the EvaluatorVisitor instance
-    public static EvaluatorVisitor getInstance() {
-        if (instance == null) {
-            instance = new EvaluatorVisitor();
+    private final Stack<Object> valueStack = new Stack<>();
+    private ISheet sheet;
+
+    // Singleton pattern for EvaluatorVisitor
+    public static EvaluatorVisitor getEvaluatorVisitor() {
+        if (evaluatorVisitor == null) {
+            evaluatorVisitor = new EvaluatorVisitor();
         }
-        return instance;
+        return evaluatorVisitor;
     }
 
-    // Evaluates the formula in the specified cell
+    // Evaluates the formula in the given cell
     public void evaluate(ICell cell) throws TypeErrorException {
         valueStack.clear();
-        this.currentSheet = cell.getSheet();
+        this.sheet = cell.getSheet();
         visitFormula(cell.getFormula());
         Object result = valueStack.pop();
-
         if (result instanceof Object[][]) {
             throw new TypeErrorException("Cell value cannot be a range of cell values");
         }
-
         cell.updateValue(result == null ? 0 : result);
     }
 
     @Override
-    public void visitFormula(Formula formula) throws TypeErrorException {
-        formula.exp.accept(this);
+    public void visitFormula(Formula f) throws TypeErrorException {
+        f.exp.accept(this);
     }
 
     @Override
@@ -65,92 +58,62 @@ public class EvaluatorVisitor implements Visitor {
         Object right = valueStack.pop();
         Object left = valueStack.pop();
 
-        valueStack.push(switch (exp.operator) {
-            case PLUS -> add(left, right);
-            case MINUS -> subtract(left, right);
-            case MUL -> multiply(left, right);
-            case DIV -> divide(left, right);
-            case POW -> power(left, right);
-            case EQ -> left.equals(right);
-            case NEQ -> !left.equals(right);
-            case GT -> compare(left, right) > 0;
-            case GE -> compare(left, right) >= 0;
-            case LT -> compare(left, right) < 0;
-            case LE -> compare(left, right) <= 0;
-            case AND -> and(left, right);
-            case OR -> or(left, right);
+        switch (exp.operator) {
+            case PLUS -> valueStack.push(add(left, right));
+            case MINUS -> valueStack.push(subtract(left, right));
+            case MUL -> valueStack.push(multiply(left, right));
+            case DIV -> valueStack.push(divide(left, right));
+            case POW -> valueStack.push(power(left, right));
+            case EQ -> valueStack.push(left.equals(right));
+            case NEQ -> valueStack.push(!left.equals(right));
+            case GT -> valueStack.push(compare(left, right) > 0);
+            case GE -> valueStack.push(compare(left, right) >= 0);
+            case LT -> valueStack.push(compare(left, right) < 0);
+            case LE -> valueStack.push(compare(left, right) <= 0);
+            case AND -> valueStack.push(and(left, right));
+            case OR -> valueStack.push(or(left, right));
             default -> throw new TypeErrorException("Unsupported operator " + exp.operator.name());
-        });
+        }
     }
 
     @Override
     public void visitUnaryExpression(UnaryExpression exp) throws TypeErrorException {
         exp.exp.accept(this);
         Object operand = valueStack.pop();
-
-        valueStack.push(switch (exp.operator) {
-            case Plus -> operand; // Unary plus
-            case Minus -> negate(operand);
+        switch (exp.operator) {
+            case Plus -> valueStack.push(operand); // Unary plus
+            case Minus -> valueStack.push(negate(operand));
             default -> throw new TypeErrorException("Unsupported unary operator");
-        });
+        }
     }
 
     @Override
     public void visitFunctionCall(FunctionCall call) throws TypeErrorException {
         call.argumentList.forEach(arg -> arg.accept(this));
         Object[] args = extractArguments(call.argumentList.size());
-        valueStack.push(applyFunction(call.functionName.toUpperCase(), args));
-    }
 
-    private Object[] extractArguments(int count) throws TypeErrorException {
-        Object[] args = new Object[count];
-        for (int i = count - 1; i >= 0; i--) {
-            args[i] = valueStack.pop();
+        switch (call.functionName.toUpperCase()) {
+            case "SUM" -> valueStack.push(sum(args));
+            case "AVG" -> valueStack.push(average(args));
+            case "MIN" -> valueStack.push(min(args));
+            case "MAX" -> valueStack.push(max(args));
+            case "COUNT" -> valueStack.push(count(args));
+            case "PRODUCT" -> valueStack.push(product(args));
+            case "MEDIAN" -> valueStack.push(median(args));
+            case "MODE" -> valueStack.push(mode(args));
+            default -> throw new TypeErrorException("Unsupported function: " + call.functionName);
         }
-        return args;
     }
 
-    private Object applyFunction(String functionName, Object[] args) {
-        return switch (functionName) {
-            case "SUM" -> sum(args);
-            case "AVG" -> average(args);
-            case "MIN" -> min(args);
-            case "MAX" -> max(args);
-            case "COUNT" -> count(args);
-            case "PRODUCT" -> product(args);
-            case "MEDIAN" -> median(args);
-            case "STDEV" -> standardDeviation(args);
-            case "VAR" -> variance(args);
-            case "MODE" -> mode(args);
-            case "IF" -> conditional(args);
-            case "CONCAT" -> concat(args);
-            default -> throw new TypeErrorException("Unsupported function: " + functionName);
-        };
-    }
     @Override
     public void visitCellReference(CellReference ref) {
-        ISheet sheet = ref.sheet == null ? currentSheet : currentSheet.getSpreadsheet().getSheet(ref.sheet);
-
-        if (ref.isRange()) {
-            // Если это диапазон, собираем все значения из указанного диапазона
-            List<ICell> cellsInRange = new ArrayList<>();
-            for (int row = ref.startRow; row <= ref.endRow; row++) {
-                for (int col = ref.startColumn; col <= ref.endColumn; col++) {
-                    ICell cell = sheet.getCellAt(row, col);
-                    cellsInRange.add(cell); // Собираем все ячейки в диапазоне
-                }
-            }
-            // Возвращаем массив значений из диапазона
-            valueStack.push(cellsInRange.toArray(new ICell[0]));
-        } else {
-            // Если это одиночная ячейка, просто возвращаем значение этой ячейки
-            valueStack.push(sheet.getValueAt(ref.startRow, ref.startColumn));
-        }
+        ISheet targetSheet = ref.sheet == null ? sheet : sheet.getSpreadsheet().getSheet(ref.sheet);
+        valueStack.push(targetSheet.getValueAt(ref.row, ref.column));
     }
 
     @Override
     public void visitParenExpression(ParenExpression exp) throws TypeErrorException {
-        exp.exp.accept(this);
+        exp.exp.accept(this); // Recursively evaluate the expression inside parentheses
     }
 
     @Override
@@ -173,6 +136,7 @@ public class EvaluatorVisitor implements Visitor {
         valueStack.push(lit.value);
     }
 
+    // Utility methods for binary operations
     private Object add(Object left, Object right) {
         if (left instanceof Number l && right instanceof Number r) {
             return l.doubleValue() + r.doubleValue();
@@ -224,36 +188,24 @@ public class EvaluatorVisitor implements Visitor {
         double sum = 0;
         for (Object arg : args) {
             if (arg instanceof Number n) {
-                sum += n.doubleValue();  // Если аргумент — это число, добавляем его к сумме
-            } else if (arg instanceof ICell[] cells) {
-                // Если это массив ячеек, суммируем их значения
-                for (ICell cell : cells) {
-                    sum += ((Number) cell.getValue()).doubleValue();
-                }
+                sum += n.doubleValue();
             } else {
                 throw new TypeErrorException("Unsupported argument type for SUM");
             }
         }
         return sum;
     }
+
     private Object average(Object[] args) {
         double sum = 0;
-        int count = 0;
         for (Object arg : args) {
             if (arg instanceof Number n) {
                 sum += n.doubleValue();
-                count++;
-            } else if (arg instanceof ICell[] cells) {
-                // Если это массив ячеек, суммируем их значения
-                for (ICell cell : cells) {
-                    sum += ((Number) cell.getValue()).doubleValue();
-                    count++;
-                }
             } else {
                 throw new TypeErrorException("Unsupported argument type for AVERAGE");
             }
         }
-        return count == 0 ? 0 : sum / count;
+        return sum / args.length;
     }
 
     private Object min(Object[] args) {
@@ -261,11 +213,6 @@ public class EvaluatorVisitor implements Visitor {
         for (Object arg : args) {
             if (arg instanceof Number n) {
                 min = Math.min(min, n.doubleValue());
-            } else if (arg instanceof ICell[] cells) {
-                // Если это массив ячеек, находим минимальное значение среди них
-                for (ICell cell : cells) {
-                    min = Math.min(min, ((Number) cell.getValue()).doubleValue());
-                }
             } else {
                 throw new TypeErrorException("Unsupported argument type for MIN");
             }
@@ -278,11 +225,6 @@ public class EvaluatorVisitor implements Visitor {
         for (Object arg : args) {
             if (arg instanceof Number n) {
                 max = Math.max(max, n.doubleValue());
-            } else if (arg instanceof ICell[] cells) {
-                // Если это массив ячеек, находим максимальное значение среди них
-                for (ICell cell : cells) {
-                    max = Math.max(max, ((Number) cell.getValue()).doubleValue());
-                }
             } else {
                 throw new TypeErrorException("Unsupported argument type for MAX");
             }
@@ -290,27 +232,11 @@ public class EvaluatorVisitor implements Visitor {
         return max;
     }
 
-    private int count(Object[] args) {
-        int count = 0;
-        for (Object arg : args) {
-            if (arg instanceof ICell[] cells) {
-                count += cells.length;
-            } else {
-                count++;
-            }
-        }
-        return count;
-    }
-
     private Object product(Object[] args) {
         double product = 1;
         for (Object arg : args) {
             if (arg instanceof Number n) {
                 product *= n.doubleValue();
-            } else if (arg instanceof ICell[] cells) {
-                for (ICell cell : cells) {
-                    product *= ((Number) cell.getValue()).doubleValue();
-                }
             } else {
                 throw new TypeErrorException("Unsupported argument type for PRODUCT");
             }
@@ -319,140 +245,58 @@ public class EvaluatorVisitor implements Visitor {
     }
 
     private Object median(Object[] args) {
-        List<Double> values = new ArrayList<>();
-        for (Object arg : args) {
-            if (arg instanceof Number n) {
-                values.add(n.doubleValue());
-            } else if (arg instanceof ICell[] cells) {
-                for (ICell cell : cells) {
-                    values.add(((Number) cell.getValue()).doubleValue());
-                }
-            } else {
-                throw new TypeErrorException("Unsupported argument type for MEDIAN");
-            }
+        double[] numbers = Arrays.stream(args)
+                .filter(Number.class::isInstance)
+                .mapToDouble(n -> ((Number) n).doubleValue())
+                .sorted()
+                .toArray();
+        int mid = numbers.length / 2;
+        if (numbers.length % 2 == 0) {
+            return (numbers[mid - 1] + numbers[mid]) / 2.0;
         }
-        Collections.sort(values);
-        int size = values.size();
-        if (size % 2 == 1) {
-            return values.get(size / 2);
-        } else {
-            return (values.get(size / 2 - 1) + values.get(size / 2)) / 2.0;
-        }
-    }
-
-    private Object standardDeviation(Object[] args) {
-        double sum = 0;
-        double count = 0;
-        for (Object arg : args) {
-            if (arg instanceof Number n) {
-                sum += n.doubleValue();
-                count++;
-            } else if (arg instanceof ICell[] cells) {
-                for (ICell cell : cells) {
-                    sum += ((Number) cell.getValue()).doubleValue();
-                    count++;
-                }
-            } else {
-                throw new TypeErrorException("Unsupported argument type for STDEV");
-            }
-        }
-        double mean = sum / count;
-        double variance = 0;
-        for (Object arg : args) {
-            if (arg instanceof Number n) {
-                variance += Math.pow(n.doubleValue() - mean, 2);
-            } else if (arg instanceof ICell[] cells) {
-                for (ICell cell : cells) {
-                    variance += Math.pow(((Number) cell.getValue()).doubleValue() - mean, 2);
-                }
-            }
-        }
-        return Math.sqrt(variance / count);
-    }
-
-    private Object variance(Object[] args) {
-        double sum = 0;
-        double count = 0;
-        for (Object arg : args) {
-            if (arg instanceof Number n) {
-                sum += n.doubleValue();
-                count++;
-            } else if (arg instanceof ICell[] cells) {
-                for (ICell cell : cells) {
-                    sum += ((Number) cell.getValue()).doubleValue();
-                    count++;
-                }
-            } else {
-                throw new TypeErrorException("Unsupported argument type for VAR");
-            }
-        }
-        double mean = sum / count;
-        double variance = 0;
-        for (Object arg : args) {
-            if (arg instanceof Number n) {
-                variance += Math.pow(n.doubleValue() - mean, 2);
-            } else if (arg instanceof ICell[] cells) {
-                for (ICell cell : cells) {
-                    variance += Math.pow(((Number) cell.getValue()).doubleValue() - mean, 2);
-                }
-            }
-        }
-        return variance / count;
+        return numbers[mid];
     }
 
     private Object mode(Object[] args) {
-        Map<Double, Integer> frequency = new HashMap<>();
-        for (Object arg : args) {
-            if (arg instanceof Number n) {
-                frequency.put(n.doubleValue(), frequency.getOrDefault(n.doubleValue(), 0) + 1);
-            } else if (arg instanceof ICell[] cells) {
-                for (ICell cell : cells) {
-                    frequency.put(((Number) cell.getValue()).doubleValue(),
-                            frequency.getOrDefault(((Number) cell.getValue()).doubleValue(), 0) + 1);
-                }
-            }
-        }
-        double mode = Double.NaN;
-        int maxCount = 0;
-        for (Map.Entry<Double, Integer> entry : frequency.entrySet()) {
-            if (entry.getValue() > maxCount) {
-                maxCount = entry.getValue();
-                mode = entry.getKey();
-            }
-        }
-        return mode;
+        Map<Object, Long> frequency = Arrays.stream(args)
+                .filter(Number.class::isInstance)
+                .collect(Collectors.groupingBy(n -> n, Collectors.counting()));
+        return frequency.entrySet().stream()
+                .max(Map.Entry.comparingByValue())
+                .orElseThrow(() -> new TypeErrorException("No mode found"))
+                .getKey();
     }
 
-    private Object conditional(Object[] args) {
-        if (args.length != 3) {
-            throw new TypeErrorException("IF function expects 3 arguments");
-        }
-        boolean condition = (boolean) args[0];
-        return condition ? args[1] : args[2];
-    }
-
-    private Object concat(Object[] args) {
-        StringBuilder sb = new StringBuilder();
-        for (Object arg : args) {
-            sb.append(arg.toString());
-        }
-        return sb.toString();
+    private int count(Object[] args) {
+        return args.length;
     }
 
     private boolean and(Object left, Object right) {
-        return (boolean) left && (boolean) right;
+        if (left instanceof Boolean l && right instanceof Boolean r) {
+            return l && r;
+        }
+        throw new TypeErrorException("Incompatible types for AND operation");
     }
 
     private boolean or(Object left, Object right) {
-        return (boolean) left || (boolean) right;
+        if (left instanceof Boolean l && right instanceof Boolean r) {
+            return l || r;
+        }
+        throw new TypeErrorException("Incompatible types for OR operation");
     }
 
     private int compare(Object left, Object right) {
         if (left instanceof Number l && right instanceof Number r) {
             return Double.compare(l.doubleValue(), r.doubleValue());
-        } else if (left instanceof String l && right instanceof String r) {
-            return l.compareTo(r);
         }
-        throw new TypeErrorException("Unsupported types for comparison");
+        throw new TypeErrorException("Incompatible types for comparison");
+    }
+
+    private Object[] extractArguments(int size) {
+        Object[] args = new Object[size];
+        for (int i = size - 1; i >= 0; i--) {
+            args[i] = valueStack.pop();
+        }
+        return args;
     }
 }

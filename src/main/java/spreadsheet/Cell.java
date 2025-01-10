@@ -126,7 +126,7 @@ public class Cell implements ICell {
         if (formula == null) {
             return;
         }
-        EvaluatorVisitor.getInstance().evaluate(this);
+        EvaluatorVisitor.getEvaluatorVisitor().evaluate(this);
         getSheet().getSpreadsheet().getDependencyGraph().usedBy(getAddress()).forEach((address)
                 -> getSheet().getSpreadsheet().getSheet(address.sheetName())
                 .getCellAt(address.row(), address.column()).evaluate());
