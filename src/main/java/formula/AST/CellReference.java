@@ -24,7 +24,7 @@ public class CellReference implements Expression {
         Matcher matcher = pattern.matcher(reference);
         if (matcher.find()) {
             startColumn = ColumnLabelConverter.toIndex(matcher.group(1));  // Преобразование столбца (например, "A" -> 0)
-            startRow = Integer.parseInt(matcher.group(2)) - 1;  // Индексы строк начинаются с 0
+            startRow = Integer.parseInt(matcher.group(2)) ;  // Индексы строк начинаются с 0
 
             if (matcher.group(3) != null) {  // Если это диапазон (например, A2:A5)
                 endColumn = ColumnLabelConverter.toIndex(matcher.group(4));  // Конечный столбец

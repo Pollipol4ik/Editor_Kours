@@ -1,18 +1,30 @@
 package gui;
 
 import javax.swing.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 
 public class FileJMenu extends JMenu {
-    FileJMenu() {
+
+    private final MainJFrame mainFrame;
+
+    public FileJMenu(MainJFrame mainFrame) {
         super("File");
+        this.mainFrame = mainFrame;
         setMnemonic(KeyEvent.VK_F);
 
         JMenuItem newJMenuItem = new JMenuItem("New");
         newJMenuItem.setMnemonic(KeyEvent.VK_N);
         add(newJMenuItem);
+        newJMenuItem.addActionListener(e -> {
+            MainJFrame newFrame = new MainJFrame(true);  // Открытие нового окна
+            newFrame.setVisible(true);
+        });
+
+        JMenuItem closeTabJMenuItem = new JMenuItem("Close Tab");
+        closeTabJMenuItem.setMnemonic(KeyEvent.VK_W);
+        add(closeTabJMenuItem);
+        closeTabJMenuItem.addActionListener(e -> mainFrame.closeWindow());  // Закрытие текущего окна
+
 
         JMenuItem openJMenuItem = new JMenuItem("Open...");
         openJMenuItem.setMnemonic(KeyEvent.VK_O);
@@ -32,6 +44,6 @@ public class FileJMenu extends JMenu {
         JMenuItem exitJMenuItem = new JMenuItem("Exit");
         exitJMenuItem.setMnemonic(KeyEvent.VK_X);
         add(exitJMenuItem);
-        exitJMenuItem.addActionListener(e -> System.exit(0));
+        exitJMenuItem.addActionListener(e -> System.exit(0));  // Закрытие всего приложения
     }
 }

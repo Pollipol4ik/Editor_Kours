@@ -10,40 +10,73 @@ import java.awt.event.ComponentListener;
 public class SheetJTabbedPane extends JTabbedPane {
     private final JComponent newSheetComponent;
     private final NewSheetComponentListener newSheetComponentListener;
+    private final ISpreadsheet spreadsheet;
 
-    SheetJTabbedPane(ISpreadsheet spreadsheet) {
+    public SheetJTabbedPane(ISpreadsheet spreadsheet) {
+        this.spreadsheet = spreadsheet;
+
+        // Добавляем существующие листы
         for (ISheet sheet : spreadsheet) {
-            JComponent sheetEditor = new SheetJPanel(sheet);
-            addTab(sheet.getName(), sheetEditor);
+            addSheetTab(sheet);
         }
-        newSheetComponent = new JComponent() {
+
+        // Добавляем компонент для создания нового листа
+        newSheetComponent = createNewSheetComponent();
+        addTab("+", newSheetComponent);
+
+        // Добавляем слушатель для компонента нового листа
+        newSheetComponentListener = new NewSheetComponentListener(this);
+        newSheetComponent.addComponentListener(newSheetComponentListener);
+
+        setTabPlacement(JTabbedPane.BOTTOM);
+        setSelectedIndex(0);
+    }
+
+    /**
+     * Добавляет новый лист в виде вкладки.
+     */
+    private void addSheetTab(ISheet sheet) {
+        JComponent sheetEditor = new SheetJPanel(sheet);
+        addTab(sheet.getName(), sheetEditor);
+    }
+
+    /**
+     * Создает компонент для кнопки добавления нового листа.
+     */
+    private JComponent createNewSheetComponent() {
+        return new JComponent() {
             @Override
             public void setInheritsPopupMenu(boolean value) {
                 super.setInheritsPopupMenu(value);
             }
         };
-        addTab("+", newSheetComponent);
-        newSheetComponentListener = new NewSheetComponentListener(this);
-        newSheetComponent.addComponentListener(newSheetComponentListener);
-        setTabPlacement(JTabbedPane.BOTTOM);
-        setSelectedIndex(0);
     }
 
-    public void setSpreadsheet(ISpreadsheet spreadsheet) {
+    /**
+     * Обновляет вкладки на основе нового объекта Spreadsheet.
+     */
+    public void setSpreadsheet(ISpreadsheet newSpreadsheet) {
         newSheetComponent.removeComponentListener(newSheetComponentListener);
-        for (int i = getTabCount() - 2; i >= 0;  i--) {
+
+        // Удаляем все текущие вкладки, кроме последней (для добавления нового листа)
+        for (int i = getTabCount() - 2; i >= 0; i--) {
             removeTabAt(i);
         }
-        for (ISheet sheet : spreadsheet) {
-            insertTab(sheet.getName(), null, new SheetJPanel(sheet), null, getTabCount() - 1);
+
+        // Добавляем листы из нового Spreadsheet
+        for (ISheet sheet : newSpreadsheet) {
+            addSheetTab(sheet);
         }
+
         setSelectedIndex(0);
         newSheetComponent.addComponentListener(newSheetComponentListener);
     }
 
+    /**
+     * Слушатель для компонента добавления нового листа.
+     */
     private static class NewSheetComponentListener implements ComponentListener {
-
-        SheetJTabbedPane sheetJTabbedPane;
+        private final SheetJTabbedPane sheetJTabbedPane;
 
         NewSheetComponentListener(SheetJTabbedPane sheetJTabbedPane) {
             this.sheetJTabbedPane = sheetJTabbedPane;
@@ -51,12 +84,12 @@ public class SheetJTabbedPane extends JTabbedPane {
 
         @Override
         public void componentResized(ComponentEvent e) {
-
+            // Не используется
         }
 
         @Override
         public void componentMoved(ComponentEvent e) {
-
+            // Не используется
         }
 
         @Override
@@ -68,7 +101,7 @@ public class SheetJTabbedPane extends JTabbedPane {
 
         @Override
         public void componentHidden(ComponentEvent e) {
-
+            // Не используется
         }
     }
 }

@@ -3,8 +3,8 @@ package gui;
 import javax.swing.*;
 
 public class MainJMenuBar extends JMenuBar  {
-    MainJMenuBar() {
-        add(new FileJMenu());
+    MainJMenuBar(MainJFrame mainJFrame) {
+        add(new FileJMenu(mainJFrame));
         //add(new EditJMenu());
     }
 }

@@ -24,6 +24,7 @@ public class SheetJTable extends JTable {
     });
 
 
+
     SheetJTable(ISheet sheet) {
         super(new SheetJTableModel(sheet));
         setColumnSelectionAllowed(false);
@@ -36,6 +37,9 @@ public class SheetJTable extends JTable {
         rowTableHeader.setDefaultRenderer(Object.class, rowTableHeader.getTableHeader().getDefaultRenderer());
         rowTableHeader.getTableHeader().getColumnModel().getColumn(0).setHeaderValue(" ");
         rowTableHeader.getPreferredScrollableViewportSize().width = rowTableHeader.getColumnModel().getColumn(0).getPreferredWidth();
+        // Подключаем горячие клавиши и контекстное меню
+        ContextMenuManager.addContextMenuToTable(this);
+        HotKeyManager.setupHotKeysForTable(this);
         SheetCellEditor cellEditor = new SheetCellEditor(new JTextField());
         getColumnModel().getColumns().asIterator().forEachRemaining((column) -> column.setCellEditor(cellEditor));
     }

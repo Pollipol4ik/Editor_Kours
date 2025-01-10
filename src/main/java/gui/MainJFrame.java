@@ -6,8 +6,9 @@ import spreadsheet.SpreadsheetOpener;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.File;
-import java.io.IOException;
 
 public class MainJFrame extends JFrame {
 
@@ -15,31 +16,65 @@ public class MainJFrame extends JFrame {
     private static ISpreadsheet spreadsheet;
     private static SheetJTabbedPane sheetTabbedPane;
 
-    private MainJFrame() {
+    public MainJFrame(boolean isNew) {
         super("Spreadsheet Editor");
-        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        addWindowListener(new MainWindowAdapter());
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);  // Отключаем закрытие по умолчанию
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                closeWindow();
+            }
+        });
         setExtendedState(JFrame.MAXIMIZED_BOTH);
-        setLayout(new GridLayout(0,1));
+        setLayout(new GridLayout(0, 1));
 
-        JMenuBar mainMenuBar = new MainJMenuBar();
+        // Установка главного меню
+        JMenuBar mainMenuBar = new MainJMenuBar(this);  // Передаем текущее окно
         setJMenuBar(mainMenuBar);
 
-        if (spreadsheet == null) {
-            spreadsheet = new Spreadsheet();
-            spreadsheet.empty();
+        // Если это новое окно, создаем пустое состояние
+        if (isNew) {
+            spreadsheet = new Spreadsheet();  // Инициализация пустого spreadsheet
+            spreadsheet.empty();  // Пустой документ
+        } else {
+            if (spreadsheet == null) {
+                spreadsheet = new Spreadsheet();
+            }
         }
+
+        // Создание вкладок с таблицами
         sheetTabbedPane = new SheetJTabbedPane(spreadsheet);
         add(sheetTabbedPane);
 
+        // Применение горячих клавиш для таблиц
+        sheetTabbedPane.addChangeListener(e -> {
+            Component selectedComponent = sheetTabbedPane.getSelectedComponent();
+            if (selectedComponent instanceof SheetJPanel) {
+                JTable table = ((SheetJPanel) selectedComponent).getTable();
+                HotKeyManager.setupHotKeysForTable(table);
+            }
+        });
+
+        // Устанавливаем видимость окна
         setVisible(true);
+    }
+
+    // Метод для закрытия окна
+    public void closeWindow() {
+        if (closeSpreadsheet() == JOptionPane.YES_OPTION) {
+            dispose();  // Закрытие текущего окна
+        }
+    }
+
+    // Обычный конструктор для старого окна
+    public MainJFrame() {
+        this(false);  // Создание окна с обычным состоянием
     }
 
     public static MainJFrame getFrame() {
         if (frame == null) {
             frame = new MainJFrame();
         }
-
         return frame;
     }
 
@@ -56,10 +91,9 @@ public class MainJFrame extends JFrame {
         return frame;
     }
 
-    public static ISpreadsheet getSpreadsheet() {
-        return spreadsheet;
-    }
+    // Другие методы, такие как open, save, и т.д.
 
+    // Метод для закрытия вкладки или окна
     public static int closeSpreadsheet() {
         if (spreadsheet.isModified()) {
             Object[] options = {"Save",
@@ -82,6 +116,18 @@ public class MainJFrame extends JFrame {
         }
         return JOptionPane.YES_OPTION;
     }
+
+    // Закрытие текущего окна
+    public static void closeCurrentWindow() {
+        if (frame != null) {
+            frame.dispose();
+        }
+    }
+
+    public static ISpreadsheet getSpreadsheet() {
+        return spreadsheet;
+    }
+
 
     public static void openSpreadsheet(String fileName) {
         if (closeSpreadsheet() == JOptionPane.CANCEL_OPTION) {
@@ -125,7 +171,20 @@ public class MainJFrame extends JFrame {
         return saveSpreadsheet(spreadsheet.getFileName());
     }
 
-    public static void redrawTable(){
+    public static void redrawTable() {
         sheetTabbedPane.getSelectedComponent().repaint();
     }
+
+    public void closeCurrentTab() {
+        int selectedIndex = sheetTabbedPane.getSelectedIndex();
+        if (selectedIndex != -1) {
+            sheetTabbedPane.remove(selectedIndex);
+        }
+
+        // Если больше нет вкладок, закрываем окно
+        if (sheetTabbedPane.getTabCount() == 0) {
+            dispose();
+        }
+    }
+
 }
