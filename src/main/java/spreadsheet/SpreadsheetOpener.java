@@ -9,7 +9,7 @@ import java.io.IOException;
 public class SpreadsheetOpener {
     public static ISpreadsheet open(String fileName) throws IOException, UnsupportedFileExtensionException, ParserConfigurationException, SAXException {
         ISpreadsheet answer;
-        if (fileName.toLowerCase().matches(".*\\.ods$")) {
+        if (fileName.toLowerCase().matches(".*\\.ods$") || fileName.toLowerCase().matches(".*\\.spreadsheet$")) {
             answer = new Spreadsheet();
             answer.open(fileName);
         } else {
