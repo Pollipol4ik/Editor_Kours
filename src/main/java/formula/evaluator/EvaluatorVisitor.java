@@ -72,8 +72,31 @@ public class EvaluatorVisitor implements Visitor {
             case LE -> valueStack.push(compare(left, right) <= 0);
             case AND -> valueStack.push(and(left, right));
             case OR -> valueStack.push(or(left, right));
+            case RANGE -> valueStack.push(sumRange(exp));
             default -> throw new TypeErrorException("Unsupported operator " + exp.operator.name());
         }
+    }
+
+    private Object sumRange(BinaryExpression exp) throws TypeErrorException {
+        if (!(exp.left instanceof CellReference leftRef) || !(exp.right instanceof CellReference rightRef)) {
+            throw new TypeErrorException("RANGE operator requires valid cell references");
+        }
+
+        ISheet targetSheet = leftRef.sheet == null ? sheet : sheet.getSpreadsheet().getSheet(leftRef.sheet);
+        int startRow = Math.min(leftRef.row, rightRef.row);
+        int endRow = Math.max(leftRef.row, rightRef.row);
+        int startCol = Math.min(leftRef.column, rightRef.column);
+        int endCol = Math.max(leftRef.column, rightRef.column);
+        double sum = 0;
+        for (int r = startRow; r <= endRow; r++) {
+            for (int c = startCol; c <= endCol; c++) {
+                Object cellValue = targetSheet.getValueAt(r, c);
+                if (cellValue instanceof Number number) {
+                    sum += number.doubleValue();
+                }
+            }
+        }
+        return sum;
     }
 
     @Override
